@@ -49,7 +49,7 @@ if st.session_state.user_status is None:
 # --- 3. GEMINI YAPILANDIRMASI ---
 # Model arama döngüsü tamamen silindi, kota sorunu yaşamaman için 1.5-flash sabitlendi.
 genai.configure(api_key=st.secrets["API_KEY"])
-secilen_model = "gemini-1.5-flash"
+secilen_model = "gemini-1.5-flash-latest"
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
