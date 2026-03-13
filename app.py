@@ -59,18 +59,28 @@ st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wi
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
-    st.title("🏋️ FitUzman AI")
-    st.subheader("Beni Hatırla Özellikli Akıllı Antrenör")
+    # Sayfa başlığı ve Görsel bir Banner (Markdown ile)
+    st.markdown("""
+        <div style="text-align: center; padding: 20px;">
+            <h1 style="color: #FF4B4B; font-size: 3rem;">🏋️ FitUzman Pro AI</h1>
+            <p style="font-size: 1.2rem; color: #555;">Kişisel Antrenörün, Beslenme Uzmanın ve Motivasyon Kaynağın.</p>
+            <hr style="border-top: 2px solid #bbb; border-radius: 5px;">
+        </div>
+    """, unsafe_allow_input=False, unsafe_allow_html=True)
+
+    # İki sütunlu yapı: Sol tarafta giriş, sağ tarafta özellikler
+    col1, col2 = st.columns([1.5, 1])
     
-    col1, col2 = st.columns([2, 1])
     with col1:
+        st.markdown("### 🚀 Hemen Başla")
         tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Kayıt Ol"])
+        
         with tab1:
-            email = st.text_input("E-posta")
-            password = st.text_input("Şifre", type="password")
-            beni_hatirla = st.checkbox("Beni Hatırla (30 Gün)")
+            email = st.text_input("E-posta Adresi", placeholder="ornek@mail.com")
+            password = st.text_input("Şifre", type="password", placeholder="******")
+            beni_hatirla = st.checkbox("Oturumu 30 gün açık tut (Beni Hatırla)")
             
-            if st.button("Giriş Yap", use_container_width=True):
+            if st.button("Sisteme Giriş Yap", use_container_width=True, type="primary"):
                 try:
                     user = auth.get_user_by_email(email)
                     st.session_state.user_status = "logged_in"
@@ -79,25 +89,48 @@ def giris_ekrani():
                     if beni_hatirla:
                         cookie_manager.set('fituzman_uid', user.uid, expires_at=datetime.now() + timedelta(days=30))
                     
+                    st.success("Giriş Başarılı! Yönlendiriliyorsunuz...")
                     st.rerun()
-                except: st.error("Kullanıcı bulunamadı veya bilgiler hatalı.")
+                except: 
+                    st.error("Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.")
         
         with tab2:
-            new_email = st.text_input("Yeni E-posta")
-            new_pw = st.text_input("Yeni Şifre", type="password")
-            if st.button("Hesap Oluştur", use_container_width=True):
+            new_email = st.text_input("E-posta Belirle", placeholder="yeni_hesap@mail.com")
+            new_pw = st.text_input("Güçlü Bir Şifre", type="password", placeholder="En az 6 karakter")
+            if st.button("Hesabımı Oluştur", use_container_width=True):
                 try:
                     auth.create_user(email=new_email, password=new_pw)
-                    st.success("Hesap açıldı! Giriş yapabilirsiniz.")
-                except Exception as e: st.error(f"Hata: {e}")
+                    st.balloons() # Tebrik efekti!
+                    st.success("Hesabın başarıyla oluşturuldu! Şimdi Giriş Yap sekmesine geçebilirsin.")
+                except Exception as e: 
+                    st.error(f"Kayıt hatası: {e}")
 
     with col2:
-        st.info("Hızlıca denemek için:")
-        if st.button("🚀 Misafir Modu", use_container_width=True):
+        # Sağ sütun: Neden FitUzman?
+        st.markdown("""
+        <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 5px solid #FF4B4B;">
+            <h4 style="margin-top: 0;">Neler Sunuyoruz?</h4>
+            <ul style="font-size: 0.9rem; color: #333;">
+                <li><b>🤖 Akıllı Analiz:</b> Boy, kilo ve VKİ değerlerine göre özel tavsiyeler.</li>
+                <li><b>📚 Kalıcı Hafıza:</b> Eski konuşmaların asla silinmez, kaldığın yerden devam edersin.</li>
+                <li><b>🍎 Beslenme Planı:</b> Sana özel makro ve öğün takipleri.</li>
+                <li><b>⚡ Hızlı Yanıt:</b> Gemini 1.5 Flash ile saniyeler içinde çözüm.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.write("") # Boşluk
+        if st.button("🚀 Kayıt Olmadan Dene (Misafir Modu)", use_container_width=True):
             st.session_state.user_status = "guest"
             st.session_state.user_info = {"uid": "guest", "email": "Misafir Kullanıcı"}
             st.rerun()
 
+    # Alt kısma küçük bir bilgi
+    st.markdown("""
+        <div style="text-align: center; margin-top: 50px; font-size: 0.8rem; color: #888;">
+            © 2026 FitUzman AI System Design Project | Tüm Veriler Firebase ile Korunmaktadır.
+        </div>
+    """, unsafe_allow_html=True)
 # --- 5. ANA UYGULAMA ---
 if st.session_state.user_status is None:
     giris_ekrani()
