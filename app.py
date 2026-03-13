@@ -2,6 +2,8 @@ import streamlit as st
 import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
+import extra_streamlit_components as stx
+from datetime import datetime, timedelta
 
 # --- 1. FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
@@ -22,7 +24,26 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 2. GEMINI YAPILANDIRMASI ---
+# --- 2. ÇEREZ VE DURUM YÖNETİMİ ---
+cookie_manager = stx.CookieManager()
+
+if "user_status" not in st.session_state:
+    st.session_state.user_status = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Otomatik Giriş Kontrolü (Çerezden oku)
+if st.session_state.user_status is None:
+    saved_uid = cookie_manager.get('fituzman_uid')
+    if saved_uid:
+        try:
+            user = auth.get_user(saved_uid)
+            st.session_state.user_status = "logged_in"
+            st.session_state.user_info = {"uid": user.uid, "email": user.email}
+        except:
+            pass
+
+# --- 3. GEMINI YAPILANDIRMASI ---
 genai.configure(api_key=st.secrets["API_KEY"])
 secilen_model = None
 try:
@@ -36,45 +57,43 @@ except: secilen_model = "models/gemini-pro"
 
 st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wide")
 
-# --- 3. DURUM YÖNETİMİ ---
-if "user_status" not in st.session_state:
-    st.session_state.user_status = None
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# --- 4. GİRİŞ VE MİSAFİR EKRANI ---
+# --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
     st.title("🏋️ FitUzman AI")
-    st.subheader("Geleceğin Fitness Asistanına Hoş Geldin")
+    st.subheader("Beni Hatırla Özellikli Akıllı Antrenör")
     
     col1, col2 = st.columns([2, 1])
-    
     with col1:
         tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Kayıt Ol"])
         with tab1:
             email = st.text_input("E-posta")
             password = st.text_input("Şifre", type="password")
-            if st.button("Giriş Yap"):
+            beni_hatirla = st.checkbox("Beni Hatırla (30 Gün)")
+            
+            if st.button("Giriş Yap", use_container_width=True):
                 try:
                     user = auth.get_user_by_email(email)
                     st.session_state.user_status = "logged_in"
                     st.session_state.user_info = {"uid": user.uid, "email": email}
+                    
+                    if beni_hatirla:
+                        cookie_manager.set('fituzman_uid', user.uid, expires_at=datetime.now() + timedelta(days=30))
+                    
                     st.rerun()
-                except: st.error("Bilgiler hatalı veya kullanıcı bulunamadı.")
+                except: st.error("Kullanıcı bulunamadı veya bilgiler hatalı.")
         
         with tab2:
             new_email = st.text_input("Yeni E-posta")
             new_pw = st.text_input("Yeni Şifre", type="password")
-            if st.button("Hesap Oluştur"):
+            if st.button("Hesap Oluştur", use_container_width=True):
                 try:
                     auth.create_user(email=new_email, password=new_pw)
                     st.success("Hesap açıldı! Giriş yapabilirsiniz.")
                 except Exception as e: st.error(f"Hata: {e}")
 
     with col2:
-        st.info("Kayıt olmadan denemek ister misin?")
-        if st.button("🚀 Misafir Olarak Devam Et", use_container_width=True):
+        st.info("Hızlıca denemek için:")
+        if st.button("🚀 Misafir Modu", use_container_width=True):
             st.session_state.user_status = "guest"
             st.session_state.user_info = {"uid": "guest", "email": "Misafir Kullanıcı"}
             st.rerun()
@@ -83,10 +102,10 @@ def giris_ekrani():
 if st.session_state.user_status is None:
     giris_ekrani()
 else:
-    # Sidebar Ayarları
+    # Sidebar
     with st.sidebar:
         st.title("🛡️ Profil")
-        st.write(f"Kullanıcı: **{st.session_state.user_info['email']}**")
+        st.write(f"Hoş geldin, **{st.session_state.user_info['email']}**")
         
         vki_aktif = st.toggle("VKİ Analizi", value=True)
         profil_bilgisi = "Genel Profil"
@@ -97,13 +116,13 @@ else:
             st.metric("VKİ", f"{vki:.1f}")
             profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}"
         
-        st.divider()
-        if st.button("🚪 Çıkış Yap", use_container_width=True):
+        if st.button("🚪 Çıkış Yap / Çerezleri Sil", use_container_width=True):
+            cookie_manager.delete('fituzman_uid')
             st.session_state.user_status = None
             st.session_state.messages = []
             st.rerun()
 
-    # Firebase'den geçmişi bir kez çek
+    # Firestore Geçmişini Yükle
     if st.session_state.user_status == "logged_in" and not st.session_state.messages:
         try:
             chat_ref = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp")
@@ -112,59 +131,38 @@ else:
                 st.session_state.messages.append(doc.to_dict())
         except: pass
 
-    st.title("🏋️ FitUzman AI")
-    
-    # Mesajları Görüntüle
+    # Sohbet Akışı
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Yeni Mesaj Girişi
-    if prompt := st.chat_input("Sorunu buraya yaz..."):
+    if prompt := st.chat_input("Hangi bölgeyi çalıştırıyoruz?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Gemini ve Kayıt Mantığı
         with st.chat_message("assistant"):
             try:
-                # Dinamik Talimat (Persona)
-                talimat = f"""
-                Sen, dünyanın en iyi spor salonlarında çalışmış, sempatik ama disiplinli bir 'Baş Antrenör' karakterisin.
-                Kullanıcı Verileri: {profil_bilgisi}.
-                
-                KURALLAR:
-                1. Enerjik ve motive edici ol. Sporcu jargonları kullan.
-                2. Markdown TABLO ve emoji kullanmaya özen göster.
-                3. Her cevabın sonunda kullanıcıya etkileşimli bir soru sor.
-                """
-                
+                talimat = f"Sen disiplinli ve motive edici bir fitness koçusun. Kullanıcı: {profil_bilgisi}. Tablo ve emoji kullan."
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 
-                # Streaming (Yazıyor efekti)
                 response = model.generate_content(prompt, stream=True)
                 res_text = ""
                 placeholder = st.empty()
-                
                 for chunk in response:
                     res_text += chunk.text
                     placeholder.markdown(res_text + "▌")
-                
                 placeholder.markdown(res_text)
                 
-                # Hafızaya ekle
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
 
-                # Firebase'e Kaydet (Sadece giriş yapılmışsa)
                 if st.session_state.user_status == "logged_in":
                     uid = st.session_state.user_info["uid"]
                     batch = db.batch()
                     u_ref = db.collection("chats").document(uid).collection("history").document()
                     a_ref = db.collection("chats").document(uid).collection("history").document()
-                    
                     batch.set(u_ref, {"role": "user", "content": prompt, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.set(a_ref, {"role": "assistant", "content": res_text, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.commit()
-                    
             except Exception as e:
-                st.error(f"Bir hata oluştu: {e}")
+                st.error(f"Hata: {e}")
