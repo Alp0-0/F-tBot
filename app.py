@@ -2,8 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # --- YAPILANDIRMA ---
-genai.configure(api_key=st.secrets["AIzaSyBcYTf98rPmPp3v9Tv2YIW8AoS8NMZLy4I"])
-
+genai.configure(api_key=st.secrets["API_KEY"])
 st.set_page_config(page_title="FitUzman AI", page_icon="💪")
 st.title("🏋️ FitUzman: 7/24 Spor Koçun")
 
