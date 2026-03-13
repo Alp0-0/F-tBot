@@ -5,6 +5,9 @@ from firebase_admin import credentials, firestore, auth
 import extra_streamlit_components as stx
 from datetime import datetime, timedelta
 
+# --- SAYFA AYARLARI (En üstte olmalıdır) ---
+st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wide")
+
 # --- 1. FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
     firebase_secrets = {
@@ -25,7 +28,11 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- 2. ÇEREZ VE DURUM YÖNETİMİ ---
-cookie_manager = stx.CookieManager()
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 if "user_status" not in st.session_state:
     st.session_state.user_status = None
@@ -45,18 +52,8 @@ if st.session_state.user_status is None:
 
 # --- 3. GEMINI YAPILANDIRMASI ---
 genai.configure(api_key=st.secrets["API_KEY"])
-secilen_model = None
-try:
-    for m in genai.list_models():
-        if "generateContent" in m.supported_generation_methods:
-            if "1.5" in m.name:
-                secilen_model = m.name
-                break
-    if not secilen_model: secilen_model = "models/gemini-pro"
-except: 
-    secilen_model = "models/gemini-pro"
-
-st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wide")
+# System Instruction destekleyen güncel ve hızlı model doğrudan seçildi
+secilen_model = "gemini-1.5-flash" 
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
@@ -85,7 +82,8 @@ def giris_ekrani():
                         cookie_manager.set('fituzman_uid', user.uid, expires_at=datetime.now() + timedelta(days=30))
                     st.success("Giriş Başarılı!")
                     st.rerun()
-                except: st.error("Giriş başarısız.")
+                except Exception as e: 
+                    st.error("Giriş başarısız. Lütfen bilgilerinizi kontrol edin.")
         
         with tab2:
             new_email = st.text_input("E-posta Belirle", placeholder="yeni_hesap@mail.com")
@@ -94,8 +92,9 @@ def giris_ekrani():
                 try:
                     auth.create_user(email=new_email, password=new_pw)
                     st.balloons()
-                    st.success("Hesap oluşturuldu!")
-                except Exception as e: st.error(f"Hata: {e}")
+                    st.success("Hesap oluşturuldu! Şimdi giriş yapabilirsiniz.")
+                except Exception as e: 
+                    st.error(f"Hata: {e}")
 
     with col2:
         st.markdown("""
@@ -118,7 +117,7 @@ def giris_ekrani():
 if st.session_state.user_status is None:
     giris_ekrani()
 else:
-    # Sidebar: Sadece temel profil ve çıkış
+    # Sidebar: Profil ve Çıkış
     with st.sidebar:
         st.title("🛡️ Profil")
         st.write(f"Hoş geldin,\n**{st.session_state.user_info['email']}**")
@@ -128,7 +127,7 @@ else:
             st.session_state.messages = []
             st.rerun()
 
-    # --- ANA EKRAN VKİ PANELİ (Giriş yapıldığında otomatik açık) ---
+    # --- ANA EKRAN VKİ PANELİ ---
     st.markdown("### 👋 Merhaba Şampiyon!")
     
     with st.expander("📊 Fiziksel Analiz ve VKİ Takibi", expanded=True):
@@ -139,10 +138,10 @@ else:
             boy = st.number_input("Boy (cm)", 100, 250, 180)
         with col_vki3:
             vki = kilo / ((boy/100) ** 2)
-            if vki < 18.5: durum, renk = "Zayıf", "blue"
-            elif 18.5 <= vki < 25: durum, renk = "Normal", "green"
-            elif 25 <= vki < 30: durum, renk = "Fazla Kilolu", "orange"
-            else: durum, renk = "Obezite", "red"
+            if vki < 18.5: durum = "Zayıf"
+            elif 18.5 <= vki < 25: durum = "Normal"
+            elif 25 <= vki < 30: durum = "Fazla Kilolu"
+            else: durum = "Obezite"
             st.metric("VKİ Değerin", f"{vki:.1f}", delta=durum)
         
         st.info(f"💡 **Analiz:** Şu an **{durum}** kategorisindesin. Gemini buna göre sana özel tavsiyeler verecek.")
@@ -150,20 +149,27 @@ else:
 
     st.divider()
 
-    # Firestore Yükleme
+    # Firestore'dan Geçmişi Yükleme
     if st.session_state.user_status == "logged_in" and not st.session_state.messages:
         try:
             docs = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp").stream()
-            for doc in docs: st.session_state.messages.append(doc.to_dict())
-        except: pass
+            for doc in docs: 
+                st.session_state.messages.append(doc.to_dict())
+        except Exception as e: 
+            pass
 
-    # Sohbet Akışı
+    # Sohbet Akışını Ekrana Basma
     for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+        with st.chat_message(msg["role"]): 
+            st.markdown(msg["content"])
 
+    # Yeni Mesaj Girişi
     if prompt := st.chat_input("Hangi bölgeyi çalıştıralım?"):
+        
+        # Kullanıcı mesajını ekrana ve state'e ekle
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("user"): 
+            st.markdown(prompt)
 
         with st.chat_message("assistant"):
             try:
@@ -177,7 +183,18 @@ else:
                 talimat = f"Sen disiplinli fitness koçusun. Kullanıcı: {profil_bilgisi}. Tablo ve emoji kullan. İlaç tavsiyesi verme, antrenman ve doğal beslenme anlat."
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 
-                response = model.generate_content(prompt, stream=True, safety_settings=safety_settings)
+                # Gemini'nin hatırlaması için geçmiş mesajları modele uygun formata çeviriyoruz
+                gemini_history = []
+                for msg in st.session_state.messages[:-1]: # Son mesajı (prompt) hariç tut
+                    role = "model" if msg["role"] == "assistant" else "user"
+                    gemini_history.append({"role": role, "parts": [msg["content"]]})
+                
+                # Hafızalı sohbeti başlat
+                chat = model.start_chat(history=gemini_history)
+                
+                # Soru gönder ve yanıtı akıcı (stream) olarak al
+                response = chat.send_message(prompt, stream=True, safety_settings=safety_settings)
+                
                 res_text = ""
                 placeholder = st.empty()
                 
@@ -186,7 +203,8 @@ else:
                         if chunk.text:
                             res_text += chunk.text
                             placeholder.markdown(res_text + "▌")
-                    except: continue
+                    except Exception: 
+                        continue
                 
                 if not res_text:
                     res_text = "Güvenlik nedeniyle bu soruyu yanıtlayamıyorum. Lütfen antrenman odaklı bir soru sor!"
@@ -194,13 +212,16 @@ else:
                 placeholder.markdown(res_text)
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
 
+                # Veritabanına Kaydetme (Yalnızca giriş yapmış kullanıcılar için)
                 if st.session_state.user_status == "logged_in":
                     uid = st.session_state.user_info["uid"]
                     batch = db.batch()
                     u_ref = db.collection("chats").document(uid).collection("history").document()
                     a_ref = db.collection("chats").document(uid).collection("history").document()
+                    
                     batch.set(u_ref, {"role": "user", "content": prompt, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.set(a_ref, {"role": "assistant", "content": res_text, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.commit()
+                    
             except Exception as e:
                 st.error(f"Sistem Hatası: {e}")
