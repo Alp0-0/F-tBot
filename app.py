@@ -48,13 +48,7 @@ if st.session_state.user_status is None:
 
 # --- 3. GEMINI YAPILANDIRMASI ---
 genai.configure(api_key=st.secrets["API_KEY"])
-secilen_model = None
-try:
-    for m in genai.list_models():
-        if "generateContent" in m.supported_generation_methods:
-            if "1.5" in m.name:
-                secilen_model = m.name
-                break
+secilen_model = "gemini-1.5-flash"
     # 1.0 Pro system_instruction desteklemediği için fallback olarak 1.5 Flash kullanıyoruz.
     if not secilen_model: 
         secilen_model = "models/gemini-1.5-flash"
