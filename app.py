@@ -30,7 +30,7 @@ if prompt := st.chat_input("Hangi bölgeyi çalıştırmak istersin?"):
         try:
             # Modeli tam burada, istek anında tanımlıyoruz (Daha güvenli)
             model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash-latest", # Sonuna -latest ekledik
+            model_name="gemini-1.5-flash", # Sonuna -latest ekledik
             system_instruction="Sen uzman bir fitness koçusun. Sadece spor ve beslenme konuş."
             )
             
