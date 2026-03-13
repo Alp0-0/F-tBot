@@ -22,114 +22,126 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 2. GEMINI YAPILANDIRMASI VE OTOMATİK MODEL SEÇİMİ ---
+# --- 2. GEMINI YAPILANDIRMASI ---
 genai.configure(api_key=st.secrets["API_KEY"])
-
-# Hata veren model ismini düzeltmek için otomatik liste tarama
 secilen_model = None
 try:
     for m in genai.list_models():
         if "generateContent" in m.supported_generation_methods:
-            # 1.5 flash veya pro modellerini ara
             if "1.5" in m.name:
                 secilen_model = m.name
                 break
-    if not secilen_model:
-        secilen_model = "models/gemini-pro" # Yedek model
-except:
-    secilen_model = "models/gemini-pro"
+    if not secilen_model: secilen_model = "models/gemini-pro"
+except: secilen_model = "models/gemini-pro"
 
-st.set_page_config(page_title="FitUzman Pro v2", page_icon="🔐", layout="wide")
+st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wide")
 
-# --- 3. KULLANICI GİRİŞ/KAYIT SİSTEMİ ---
-if "user_info" not in st.session_state:
-    st.session_state.user_info = None
+# --- 3. DURUM YÖNETİMİ ---
+if "user_status" not in st.session_state:
+    st.session_state.user_status = None # "logged_in", "guest" veya None
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# --- 4. GİRİŞ VE MİSAFİR EKRANI ---
 def giris_ekrani():
-    st.title("🔐 FitUzman Pro'ya Hoş Geldin")
-    tab1, tab2 = st.tabs(["Giriş Yap", "Kayıt Ol"])
+    st.title("🏋️ FitUzman AI")
+    st.subheader("Geleceğin Fitness Asistanına Hoş Geldin")
     
-    with tab1:
-        email = st.text_input("E-posta", key="login_email")
-        password = st.text_input("Şifre", type="password", key="login_pw")
-        if st.button("Sisteme Gir"):
-            try:
-                user = auth.get_user_by_email(email)
-                st.session_state.user_info = {"uid": user.uid, "email": email}
-                st.success("Giriş Başarılı!")
-                st.rerun()
-            except:
-                st.error("Kullanıcı bulunamadı veya bilgiler hatalı.")
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Kayıt Ol"])
+        with tab1:
+            email = st.text_input("E-posta")
+            password = st.text_input("Şifre", type="password")
+            if st.button("Giriş Yap"):
+                try:
+                    user = auth.get_user_by_email(email)
+                    st.session_state.user_status = "logged_in"
+                    st.session_state.user_info = {"uid": user.uid, "email": email}
+                    st.rerun()
+                except: st.error("Bilgiler hatalı veya kullanıcı bulunamadı.")
+        
+        with tab2:
+            new_email = st.text_input("Yeni E-posta")
+            new_pw = st.text_input("Yeni Şifre", type="password")
+            if st.button("Hesap Oluştur"):
+                try:
+                    auth.create_user(email=new_email, password=new_pw)
+                    st.success("Hesap açıldı! Giriş yapabilirsiniz.")
+                except Exception as e: st.error(f"Hata: {e}")
 
-    with tab2:
-        new_email = st.text_input("E-posta", key="reg_email")
-        new_password = st.text_input("Şifre (min. 6 karakter)", type="password", key="reg_pw")
-        if st.button("Hesap Oluştur"):
-            try:
-                auth.create_user(email=new_email, password=new_password)
-                st.success("Hesap oluşturuldu! Giriş yapabilirsiniz.")
-            except Exception as e:
-                st.error(f"Hata: {e}")
+    with col2:
+        st.info("Kayıt olmadan denemek ister misin?")
+        if st.button("🚀 Misafir Olarak Devam Et", use_container_width=True):
+            st.session_state.user_status = "guest"
+            st.session_state.user_info = {"uid": "guest", "email": "Misafir Kullanıcı"}
+            st.rerun()
 
-# --- 4. ANA UYGULAMA ---
-if st.session_state.user_info is None:
+# --- 5. ANA UYGULAMA DÖNGÜSÜ ---
+if st.session_state.user_status is None:
     giris_ekrani()
 else:
-    user_uid = st.session_state.user_info["uid"]
-    
+    # Sidebar
     with st.sidebar:
-        st.write(f"👤 **{st.session_state.user_info['email']}**")
-        vki_aktif = st.toggle("VKİ Analizini Kullan", value=True)
+        st.title("🛡️ Profil")
+        st.write(f"Durum: **{st.session_state.user_info['email']}**")
+        
+        if st.session_state.user_status == "guest":
+            st.warning("⚠️ Misafir modundasınız. Konuşmalarınız kaydedilmez.")
+        
+        vki_aktif = st.toggle("VKİ Analizi", value=True)
         if vki_aktif:
             kilo = st.number_input("Kilo (kg)", 30, 200, 75)
             boy = st.number_input("Boy (cm)", 100, 250, 180)
             vki = kilo / ((boy/100) ** 2)
-            st.metric("VKİ Endeksiniz", f"{vki:.1f}")
+            st.metric("VKİ", f"{vki:.1f}")
         
-        if st.button("🚪 Çıkış Yap", use_container_width=True):
-            st.session_state.user_info = None
+        if st.button("🚪 Çıkış Yap / Ana Menü", use_container_width=True):
+            st.session_state.user_status = None
             st.session_state.messages = []
             st.rerun()
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    # Geçmişi Yükle (Sadece Giriş Yapılmışsa)
+    if st.session_state.user_status == "logged_in" and not st.session_state.messages:
         try:
-            chat_ref = db.collection("chats").document(user_uid).collection("history").order_by("timestamp")
+            chat_ref = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp")
             docs = chat_ref.stream()
             for doc in docs:
                 st.session_state.messages.append(doc.to_dict())
         except: pass
 
-    st.title("🏋️ FitUzman AI: Akıllı Koç")
+    # Sohbet Arayüzü
+    st.title("🏋️ FitUzman AI")
     
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Hedefini veya sorunu yaz..."):
+    if prompt := st.chat_input("Sorunu buraya yaz..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        profil = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}" if vki_aktif else "Genel profil"
-        talimat = f"Sen profesyonel bir fitness koçusun. Kullanıcı verisi: {profil}. Bilimsel yanıtlar ver."
-        
+        # Gemini Yanıtı
         with st.chat_message("assistant"):
             try:
-                # Modeli başlatırken tam ismini kullanıyoruz (models/gemini-1.5-flash gibi)
+                talimat = f"Sen bir fitness koçusun. VKİ: {vki:.1f}" if vki_aktif else "Sen bir fitness koçusun."
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 response = model.generate_content(prompt)
-                response_text = response.text
-                st.markdown(response_text)
-                
-                st.session_state.messages.append({"role": "assistant", "content": response_text})
-                
-                # Firebase Kayıt
-                batch = db.batch()
-                u_ref = db.collection("chats").document(user_uid).collection("history").document()
-                a_ref = db.collection("chats").document(user_uid).collection("history").document()
-                batch.set(u_ref, {"role": "user", "content": prompt, "timestamp": firestore.SERVER_TIMESTAMP})
-                batch.set(a_ref, {"role": "assistant", "content": response_text, "timestamp": firestore.SERVER_TIMESTAMP})
-                batch.commit()
+                res_text = response.text
+                st.markdown(res_text)
+                st.session_state.messages.append({"role": "assistant", "content": res_text})
+
+                # --- KAYIT MANTIĞI ---
+                if st.session_state.user_status == "logged_in":
+                    uid = st.session_state.user_info["uid"]
+                    batch = db.batch()
+                    u_ref = db.collection("chats").document(uid).collection("history").document()
+                    a_ref = db.collection("chats").document(uid).collection("history").document()
+                    batch.set(u_ref, {"role": "user", "content": prompt, "timestamp": firestore.SERVER_TIMESTAMP})
+                    batch.set(a_ref, {"role": "assistant", "content": res_text, "timestamp": firestore.SERVER_TIMESTAMP})
+                    batch.commit()
             except Exception as e:
-                st.error(f"Cevap üretilemedi: {e}")
+                st.error(f"Hata: {e}")
