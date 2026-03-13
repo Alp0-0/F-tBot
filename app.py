@@ -125,9 +125,36 @@ else:
             st.markdown(prompt)
 
         # Gemini Yanıtı
-        with st.chat_message("assistant"):
+      with st.chat_message("assistant"):
             try:
-                talimat = f"Sen bir fitness koçusun. VKİ: {vki:.1f}" if vki_aktif else "Sen bir fitness koçusun."
+                model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
+                # Stream=True ile cevabı parça parça alıyoruz
+                response = model.generate_content(prompt, stream=True)
+                
+                res_text = ""
+                placeholder = st.empty() # Cevabın yazılacağı boş alan
+                
+                for chunk in response:
+                    res_text += chunk.text
+                    placeholder.markdown(res_text + "▌") # Yazma efekti
+                
+                placeholder.markdown(res_text) # Yazma bitince imleci kaldır
+                
+                st.session_state.messages.append({"role": "assistant", "content": res_text})
+                # ... (Firebase kayıt kodların burada devam edecek)
+            try:
+                talimat = f"""
+Sen, dünyanın en iyi spor salonlarında çalışmış, sempatik ama disiplinli bir 'Baş Antrenör' ve 'Beslenme Uzmanı' karakterisin. 
+Adın: FitUzman AI. 
+
+DAVRANIŞ KURALLARIN:
+1. **Persona:** Enerjik, motive edici ve profesyonel bir dil kullan. Cümle aralarına sporcu jargonları (Set, reps, bulk, definasyon, makrolar) serpiştir.
+2. **Kişiselleştirme:** {profil} verilerini asla unutma. Eğer kullanıcı obezite sınırındaysa ona 'şampiyon, eklemlerini korumak için bugün koşu bandı yerine eliptik yapalım' gibi spesifik tavsiyeler ver.
+3. **Görsellik:** Liste verirken mutlaka emoji kullan. Program yazarken mutlaka Markdown TABLO formatını kullan. Önemli uyarıları **kalın** yaz.
+4. **Bilimsellik:** Bir öneri verdiğinde (örn: neden yüksek protein?) bunun arkasındaki fizyolojik nedeni kısaca açıkla.
+5. **Diyaloğu Canlı Tut:** Her cevabın sonunda mutlaka kullanıcıya süreci devam ettirecek, onu düşündürecek bir soru sor. (Örn: 'Peki, bugün antrenman için 45 dakikan var mı?', 'Bu diyet listesindeki öğünlerden hangisi seni en çok zorlar?')
+6. **Yasaklar:** Fitness, spor, sağlık ve beslenme dışındaki soruları 'Benim uzmanlık alanım demir ve ter şampiyon, gel biz hedeflerine odaklanalım' diyerek nazikçe reddet.
+"""
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 response = model.generate_content(prompt)
                 res_text = response.text
