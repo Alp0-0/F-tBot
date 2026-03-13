@@ -1,16 +1,21 @@
 import streamlit as st
 import google.generativeai as genai
-import PyPDF2
 
 # --- YAPILANDIRMA ---
 genai.configure(api_key=st.secrets["API_KEY"])
 
-def pdf_metnini_oku(pdf_dosyasi):
-    pdf_reader = PyPDF2.PdfReader(pdf_dosyasi)
-    metin = ""
-    for sayfa in pdf_reader.pages:
-        metin += sayfa.extract_text() or ""
-    return metin
+# ==========================================
+# 👑 ADMİN BÖLGESİ: BURAYA KENDİ SİSTEMİNİ YAZ
+# ==========================================
+ADMIN_PROGRAMI = """
+GENEL BİLGİLER VE KURALLAR:
+- Yeni başlayanlar (VKİ 25 üstü) için ilk 2 hafta sadece kardiyo (yürüyüş/yüzme) önerilecek.
+- Ağırlık antrenmanları: Pazartesi (Göğüs/Sırt), Çarşamba (Bacak/Omuz), Cuma (Tüm Vücut).
+- Beslenme kuralı: İşlenmiş şeker kesinlikle yasak. Günlük en az 2.5 litre su içilecek.
+- Egzersiz formları sorulduğunda, hareketin doğru yapılışını adım adım anlat.
+(Not: Bu kısmı Kadir Hoca hazırlamıştır, sadece bu kuralların dışına çıkma.)
+"""
+# ==========================================
 
 st.set_page_config(page_title="FitUzman Pro", page_icon="💪", layout="wide")
 
@@ -33,7 +38,7 @@ except Exception as e:
 
 # --- YAN PANEL (SIDEBAR) ---
 with st.sidebar:
-    st.header("📊 Profil ve Dosyalar")
+    st.header("📊 Vücut Analizi")
     
     kilo = st.number_input("Kilo (kg)", 30, 200, 75)
     boy = st.number_input("Boy (cm)", 100, 250, 180)
@@ -41,19 +46,13 @@ with st.sidebar:
     
     st.metric("VKİ Endeksiniz", f"{vki:.1f}")
     
-    # VKİ'ye göre renkli uyarılar
     if vki < 18.5: st.warning("Durum: Zayıf")
     elif 18.5 <= vki < 25: st.success("Durum: Normal")
     elif 25 <= vki < 30: st.warning("Durum: Fazla Kilolu")
     else: st.error("Durum: Obezite Sınırı")
 
     st.divider()
-
-    yuklenen_pdf = st.file_uploader("Antrenman Programını Yükle (PDF)", type="pdf")
-    pdf_metni = ""
-    if yuklenen_pdf:
-        pdf_metni = pdf_metnini_oku(yuklenen_pdf)
-        st.success("Program başarıyla yüklendi ve yapay zekanın hafızasına aktarıldı!")
+    st.info("💡 Sistem, Kadir Hoca'nın özel antrenman prensipleriyle çalışmaktadır.")
 
 # --- ANA EKRAN ---
 st.title("🏋️ FitUzman Pro")
@@ -66,7 +65,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Bana hedeflerinden bahset veya PDF'indeki programı sor..."):
+if prompt := st.chat_input("Hedefini yaz, Kadir Hoca'nın sistemine göre planını al..."):
     if not secilen_model:
         st.warning("Motor bulunamadığı için cevap veremiyorum.")
     else:
@@ -74,16 +73,18 @@ if prompt := st.chat_input("Bana hedeflerinden bahset veya PDF'indeki programı 
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Botun Zekası: Boy, kilo, VKİ ve PDF'i birleştiriyoruz!
+        # Botun Zekası: Boy, kilo ve senin Admin Kuralların birleşiyor!
         dinamik_talimat = f"""
-        Sen uzman bir fitness ve beslenme koçusun. 
+        Sen uzman bir fitness ve beslenme koçusun.
         KULLANICI PROFİLİ: Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}.
-        ANTRENMAN PROGRAMI: {pdf_metni if pdf_metni else 'Henüz PDF yüklenmedi.'}
+        
+        UYGULAMAN GEREKEN ANA SİSTEM VE PROGRAM (Kadir Hoca'nın Kuralları):
+        {ADMIN_PROGRAMI}
         
         KURALLAR:
-        1. Sadece fitness, spor, sağlık ve beslenme konularında cevap ver. Başka konuları reddet.
-        2. Cevap verirken kullanıcının VKİ değerini dikkate al.
-        3. Kullanıcı programıyla ilgili bir şey sorarsa, ANTRENMAN PROGRAMI metnine bakarak cevap ver.
+        1. Sadece fitness, spor, sağlık ve beslenme konularında cevap ver.
+        2. Her zaman kullanıcının VKİ değerini dikkate alarak konuş.
+        3. Antrenman veya beslenme tavsiyesi verirken SADECE yukarıdaki "ANA SİSTEM VE PROGRAM" kurallarını uygula.
         """
 
         with st.chat_message("assistant"):
