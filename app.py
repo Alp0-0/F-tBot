@@ -5,6 +5,9 @@ from firebase_admin import credentials, firestore, auth
 import extra_streamlit_components as stx
 from datetime import datetime, timedelta
 
+# --- 0. SAYFA YAPILANDIRMASI (EN BAŞTA OLMALI) ---
+st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wide")
+
 # --- 1. FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
     firebase_secrets = {
@@ -52,10 +55,11 @@ try:
             if "1.5" in m.name:
                 secilen_model = m.name
                 break
-    if not secilen_model: secilen_model = "models/gemini-pro"
-except: secilen_model = "models/gemini-pro"
-
-st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wide")
+    # 1.0 Pro system_instruction desteklemediği için fallback olarak 1.5 Flash kullanıyoruz.
+    if not secilen_model: 
+        secilen_model = "models/gemini-1.5-flash"
+except: 
+    secilen_model = "models/gemini-1.5-flash"
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
@@ -80,7 +84,8 @@ def giris_ekrani():
                         cookie_manager.set('fituzman_uid', user.uid, expires_at=datetime.now() + timedelta(days=30))
                     
                     st.rerun()
-                except: st.error("Kullanıcı bulunamadı veya bilgiler hatalı.")
+                except: 
+                    st.error("Kullanıcı bulunamadı veya bilgiler hatalı.")
         
         with tab2:
             new_email = st.text_input("Yeni E-posta")
@@ -89,7 +94,8 @@ def giris_ekrani():
                 try:
                     auth.create_user(email=new_email, password=new_pw)
                     st.success("Hesap açıldı! Giriş yapabilirsiniz.")
-                except Exception as e: st.error(f"Hata: {e}")
+                except Exception as e: 
+                    st.error(f"Hata: {e}")
 
     with col2:
         st.info("Hızlıca denemek için:")
@@ -128,8 +134,14 @@ else:
             chat_ref = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp")
             docs = chat_ref.stream()
             for doc in docs:
-                st.session_state.messages.append(doc.to_dict())
-        except: pass
+                # Sadece role ve content alınıyor, UI'da timestamp hatası önleniyor.
+                data = doc.to_dict()
+                st.session_state.messages.append({
+                    "role": data.get("role", "user"),
+                    "content": data.get("content", "")
+                })
+        except: 
+            pass
 
     # Sohbet Akışı
     for msg in st.session_state.messages:
@@ -149,9 +161,16 @@ else:
                 response = model.generate_content(prompt, stream=True)
                 res_text = ""
                 placeholder = st.empty()
+                
                 for chunk in response:
-                    res_text += chunk.text
-                    placeholder.markdown(res_text + "▌")
+                    # Güvenlik filtresine takılmaları önlemek için chunk kontrolü
+                    try:
+                        if chunk.text:
+                            res_text += chunk.text
+                            placeholder.markdown(res_text + "▌")
+                    except ValueError:
+                        continue # Eğer chunk engellendiyse atla
+                        
                 placeholder.markdown(res_text)
                 
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
