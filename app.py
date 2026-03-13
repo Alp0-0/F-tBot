@@ -32,7 +32,7 @@ if "user_status" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Otomatik Giriş Kontrolü (Çerezden oku)
+# Otomatik Giriş Kontrolü
 if st.session_state.user_status is None:
     saved_uid = cookie_manager.get('fituzman_uid')
     if saved_uid:
@@ -60,8 +60,6 @@ st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wi
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
-    # Sayfa başlığı ve Görsel bir Banner
-    # HATA DÜZELTİLDİ: unsafe_allow_input silindi.
     st.markdown("""
         <div style="text-align: center; padding: 20px;">
             <h1 style="color: #FF4B4B; font-size: 3rem;">🏋️ FitUzman Pro AI</h1>
@@ -71,65 +69,50 @@ def giris_ekrani():
     """, unsafe_allow_html=True)
 
     col1, col2 = st.columns([1.5, 1])
-    
     with col1:
         st.markdown("### 🚀 Hemen Başla")
         tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Kayıt Ol"])
-        
         with tab1:
             email = st.text_input("E-posta Adresi", placeholder="ornek@mail.com")
             password = st.text_input("Şifre", type="password", placeholder="******")
             beni_hatirla = st.checkbox("Oturumu 30 gün açık tut (Beni Hatırla)")
-            
             if st.button("Sisteme Giriş Yap", use_container_width=True, type="primary"):
                 try:
                     user = auth.get_user_by_email(email)
                     st.session_state.user_status = "logged_in"
                     st.session_state.user_info = {"uid": user.uid, "email": email}
-                    
                     if beni_hatirla:
                         cookie_manager.set('fituzman_uid', user.uid, expires_at=datetime.now() + timedelta(days=30))
-                    
-                    st.success("Giriş Başarılı! Yönlendiriliyorsunuz...")
+                    st.success("Giriş Başarılı!")
                     st.rerun()
-                except: 
-                    st.error("Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.")
+                except: st.error("Giriş başarısız.")
         
         with tab2:
             new_email = st.text_input("E-posta Belirle", placeholder="yeni_hesap@mail.com")
-            new_pw = st.text_input("Güçlü Bir Şifre", type="password", placeholder="En az 6 karakter")
+            new_pw = st.text_input("Güçlü Bir Şifre", type="password")
             if st.button("Hesabımı Oluştur", use_container_width=True):
                 try:
                     auth.create_user(email=new_email, password=new_pw)
                     st.balloons()
-                    st.success("Hesabın başarıyla oluşturuldu! Şimdi Giriş Yap sekmesine geçebilirsin.")
-                except Exception as e: 
-                    st.error(f"Kayıt hatası: {e}")
+                    st.success("Hesap oluşturuldu!")
+                except Exception as e: st.error(f"Hata: {e}")
 
     with col2:
         st.markdown("""
         <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 5px solid #FF4B4B;">
             <h4 style="margin-top: 0;">Neler Sunuyoruz?</h4>
             <ul style="font-size: 0.9rem; color: #333;">
-                <li><b>🤖 Akıllı Analiz:</b> Boy, kilo ve VKİ değerlerine göre özel tavsiyeler.</li>
-                <li><b>📚 Kalıcı Hafıza:</b> Eski konuşmaların asla silinmez.</li>
-                <li><b>🍎 Beslenme Planı:</b> Sana özel makro ve öğün takipleri.</li>
-                <li><b>⚡ Hızlı Yanıt:</b> Gemini 1.5 Flash ile anında çözüm.</li>
+                <li><b>🤖 Akıllı Analiz:</b> Verilerine göre özel tavsiyeler.</li>
+                <li><b>📚 Kalıcı Hafıza:</b> Geçmişin hep seninle.</li>
+                <li><b>🍎 Beslenme Planı:</b> Makro ve öğün takipleri.</li>
+                <li><b>⚡ Hızlı Yanıt:</b> Saniyeler içinde çözüm.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
-        
-        st.write("")
-        if st.button("🚀 Kayıt Olmadan Dene (Misafir Modu)", use_container_width=True):
+        if st.button("🚀 Misafir Modu", use_container_width=True):
             st.session_state.user_status = "guest"
-            st.session_state.user_info = {"uid": "guest", "email": "Misafir Kullanıcı"}
+            st.session_state.user_info = {"uid": "guest", "email": "Misafir"}
             st.rerun()
-
-    st.markdown("""
-        <div style="text-align: center; margin-top: 50px; font-size: 0.8rem; color: #888;">
-            © 2026 FitUzman AI System Design Project | Tüm Veriler Firebase ile Korunmaktadır.
-        </div>
-    """, unsafe_allow_html=True)
 
 # --- 5. ANA UYGULAMA ---
 if st.session_state.user_status is None:
@@ -137,8 +120,7 @@ if st.session_state.user_status is None:
 else:
     with st.sidebar:
         st.title("🛡️ Profil")
-        st.write(f"Hoş geldin, **{st.session_state.user_info['email']}**")
-        
+        st.write(f"**{st.session_state.user_info['email']}**")
         vki_aktif = st.toggle("VKİ Analizi", value=True)
         profil_bilgisi = "Genel Profil"
         if vki_aktif:
@@ -148,54 +130,64 @@ else:
             st.metric("VKİ", f"{vki:.1f}")
             profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}"
         
-        if st.button("🚪 Çıkış Yap / Çerezleri Sil", use_container_width=True):
+        if st.button("🚪 Çıkış Yap", use_container_width=True):
             cookie_manager.delete('fituzman_uid')
             st.session_state.user_status = None
             st.session_state.messages = []
             st.rerun()
 
+    # Firestore Yükleme
     if st.session_state.user_status == "logged_in" and not st.session_state.messages:
         try:
-            chat_ref = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp")
-            docs = chat_ref.stream()
-            for doc in docs:
-                st.session_state.messages.append(doc.to_dict())
-        except: 
-            pass
+            docs = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp").stream()
+            for doc in docs: st.session_state.messages.append(doc.to_dict())
+        except: pass
 
-    st.title("🏋️ FitUzman AI")
-    
+    # Sohbet
     for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Hangi bölgeyi çalıştırıyoruz?"):
+    if prompt := st.chat_input("Mesajını yaz..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
 
         with st.chat_message("assistant"):
             try:
-                talimat = f"Sen disiplinli ve motive edici bir fitness koçusun. Kullanıcı: {profil_bilgisi}. Tablo ve emoji kullan."
+                # GÜVENLİK AYARLARI (Hata çözümü burası)
+                safety_settings = [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                ]
+                
+                talimat = f"Sen disiplinli fitness koçusun. Kullanıcı: {profil_bilgisi}. Tablo ve emoji kullan. Asla medikal ilaç tavsiyesi verme ama antrenman ve doğal beslenme anlat."
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 
-                response = model.generate_content(prompt, stream=True)
+                response = model.generate_content(prompt, stream=True, safety_settings=safety_settings)
                 res_text = ""
                 placeholder = st.empty()
-                for chunk in response:
-                    res_text += chunk.text
-                    placeholder.markdown(res_text + "▌")
-                placeholder.markdown(res_text)
                 
+                for chunk in response:
+                    try:
+                        if chunk.text:
+                            res_text += chunk.text
+                            placeholder.markdown(res_text + "▌")
+                    except: continue # Güvenliğe takılan parçayı atla
+                
+                if not res_text:
+                    res_text = "Bu isteği güvenlik kuralları nedeniyle yanıtlayamıyorum. Lütfen antrenman veya beslenme ile ilgili farklı bir şey sor şampiyon!"
+                
+                placeholder.markdown(res_text)
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
 
                 if st.session_state.user_status == "logged_in":
                     uid = st.session_state.user_info["uid"]
-                    batch = db.batch()
                     u_ref = db.collection("chats").document(uid).collection("history").document()
                     a_ref = db.collection("chats").document(uid).collection("history").document()
+                    batch = db.batch()
                     batch.set(u_ref, {"role": "user", "content": prompt, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.set(a_ref, {"role": "assistant", "content": res_text, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.commit()
             except Exception as e:
-                st.error(f"Hata: {e}")
+                st.error(f"Sistem Hatası: {e}")
