@@ -47,9 +47,9 @@ if st.session_state.user_status is None:
             pass
 
 # --- 3. GEMINI YAPILANDIRMASI ---
-# Model arama döngüsü tamamen silindi, kota sorunu yaşamaman için 1.5-flash sabitlendi.
+# Her sürümde sorunsuz çalışan klasik modeli seçiyoruz
 genai.configure(api_key=st.secrets["API_KEY"])
-secilen_model = "gemini-1.5-flash-latest"
+secilen_model = "gemini-pro"
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
@@ -129,16 +129,21 @@ else:
             st.markdown(msg["content"])
 
     if prompt := st.chat_input("Hangi bölgeyi çalıştırıyoruz?"):
+        # Ekranda sadece kullanıcının yazdığını gösteriyoruz
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
             try:
-                talimat = "Sen disiplinli ve motive edici bir fitness koçusun. Tablo ve emoji kullan."
-                model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
+                # Klasik model system_instruction desteklemez, sadece model_name veriyoruz
+                model = genai.GenerativeModel(model_name=secilen_model)
                 
-                response = model.generate_content(prompt, stream=True)
+                # Talimatı kullanıcının mesajıyla birleştirip arka planda gönderiyoruz
+                talimat = "Sen disiplinli ve motive edici bir fitness koçusun. Tablo ve emoji kullan. Kullanıcıya buna göre cevap ver:\n\n"
+                gizli_prompt = f"{talimat} Kullanıcı sorusu: {prompt}"
+                
+                response = model.generate_content(gizli_prompt, stream=True)
                 res_text = ""
                 placeholder = st.empty()
                 
