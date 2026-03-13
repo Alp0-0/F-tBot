@@ -47,13 +47,9 @@ if st.session_state.user_status is None:
             pass
 
 # --- 3. GEMINI YAPILANDIRMASI ---
+# Model arama döngüsü tamamen silindi, kota sorunu yaşamaman için 1.5-flash sabitlendi.
 genai.configure(api_key=st.secrets["API_KEY"])
-    secilen_model = "gemini-1.5-flash"
-    # 1.0 Pro system_instruction desteklemediği için fallback olarak 1.5 Flash kullanıyoruz.
-    if not secilen_model: 
-        secilen_model = "models/gemini-1.5-flash"
-except: 
-    secilen_model = "models/gemini-1.5-flash"
+secilen_model = "gemini-1.5-flash"
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
@@ -107,8 +103,6 @@ else:
         st.title("🛡️ Profil")
         st.write(f"Hoş geldin, **{st.session_state.user_info['email']}**")
         
-        # VKİ bölümü tamamen kaldırıldı
-        
         if st.button("🚪 Çıkış Yap / Çerezleri Sil", use_container_width=True):
             cookie_manager.delete('fituzman_uid')
             st.session_state.user_status = None
@@ -121,7 +115,6 @@ else:
             chat_ref = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp")
             docs = chat_ref.stream()
             for doc in docs:
-                # Sadece role ve content alınıyor, UI'da timestamp hatası önleniyor.
                 data = doc.to_dict()
                 st.session_state.messages.append({
                     "role": data.get("role", "user"),
@@ -142,7 +135,6 @@ else:
 
         with st.chat_message("assistant"):
             try:
-                # Profil bilgisi yapay zeka talimatından çıkarıldı
                 talimat = "Sen disiplinli ve motive edici bir fitness koçusun. Tablo ve emoji kullan."
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 
@@ -151,13 +143,12 @@ else:
                 placeholder = st.empty()
                 
                 for chunk in response:
-                    # Güvenlik filtresine takılmaları önlemek için chunk kontrolü
                     try:
                         if chunk.text:
                             res_text += chunk.text
                             placeholder.markdown(res_text + "▌")
                     except ValueError:
-                        continue # Eğer chunk engellendiyse atla
+                        continue 
                         
                 placeholder.markdown(res_text)
                 
