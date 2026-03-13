@@ -35,7 +35,7 @@ if "user_status" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Otomatik Giriş Kontrolü (Çerezden oku)
+# Otomatik Giriş Kontrolü
 if st.session_state.user_status is None:
     saved_uid = cookie_manager.get('fituzman_uid')
     if saved_uid:
@@ -46,10 +46,30 @@ if st.session_state.user_status is None:
         except:
             pass
 
-# --- 3. GEMINI YAPILANDIRMASI ---
-# Her sürümde sorunsuz çalışan klasik modeli seçiyoruz
+# --- 3. AKILLI GEMINI YAPILANDIRMASI ---
 genai.configure(api_key=st.secrets["API_KEY"])
-secilen_model = "gemini-pro"
+
+secilen_model = "gemini-1.5-flash" # Varsayılan güvenlik ağı
+try:
+    mevcut_modeller = []
+    # API'ye bağlanıp sadece metin üretebilen modelleri listele
+    for m in genai.list_models():
+        if "generateContent" in m.supported_generation_methods:
+            # Düşük kotalı "robotics" veya "preview" (test) modellerini ele
+            if "robotics" not in m.name and "preview" not in m.name:
+                mevcut_modeller.append(m.name)
+    
+    # Listede flash varsa öncelikli olarak onu seç (hızlı ve kotası yüksektir)
+    for model_adi in mevcut_modeller:
+        if "flash" in model_adi:
+            secilen_model = model_adi
+            break
+    else:
+        # Flash bulamazsa listedeki ilk güvenli modeli seç
+        if mevcut_modeller:
+            secilen_model = mevcut_modeller[0]
+except Exception as e:
+    pass
 
 # --- 4. GİRİŞ EKRANI ---
 def giris_ekrani():
@@ -69,10 +89,8 @@ def giris_ekrani():
                     user = auth.get_user_by_email(email)
                     st.session_state.user_status = "logged_in"
                     st.session_state.user_info = {"uid": user.uid, "email": email}
-                    
                     if beni_hatirla:
                         cookie_manager.set('fituzman_uid', user.uid, expires_at=datetime.now() + timedelta(days=30))
-                    
                     st.rerun()
                 except: 
                     st.error("Kullanıcı bulunamadı veya bilgiler hatalı.")
@@ -102,6 +120,7 @@ else:
     with st.sidebar:
         st.title("🛡️ Profil")
         st.write(f"Hoş geldin, **{st.session_state.user_info['email']}**")
+        st.success(f"🤖 Aktif Model: {secilen_model.replace('models/', '')}")
         
         if st.button("🚪 Çıkış Yap / Çerezleri Sil", use_container_width=True):
             cookie_manager.delete('fituzman_uid')
@@ -129,17 +148,16 @@ else:
             st.markdown(msg["content"])
 
     if prompt := st.chat_input("Hangi bölgeyi çalıştırıyoruz?"):
-        # Ekranda sadece kullanıcının yazdığını gösteriyoruz
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
             try:
-                # Klasik model system_instruction desteklemez, sadece model_name veriyoruz
+                # Modeli başlat
                 model = genai.GenerativeModel(model_name=secilen_model)
                 
-                # Talimatı kullanıcının mesajıyla birleştirip arka planda gönderiyoruz
+                # Gizli sistem talimatını soruya entegre et
                 talimat = "Sen disiplinli ve motive edici bir fitness koçusun. Tablo ve emoji kullan. Kullanıcıya buna göre cevap ver:\n\n"
                 gizli_prompt = f"{talimat} Kullanıcı sorusu: {prompt}"
                 
@@ -156,9 +174,9 @@ else:
                         continue 
                         
                 placeholder.markdown(res_text)
-                
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
 
+                # Firestore'a Kaydet
                 if st.session_state.user_status == "logged_in":
                     uid = st.session_state.user_info["uid"]
                     batch = db.batch()
