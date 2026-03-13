@@ -59,8 +59,7 @@ with st.sidebar:
     elif 25 <= vki < 30: st.warning("Durum: Fazla Kilolu")
     else: st.error("Durum: Obezite Sınırı")
 
-    st.divider()
-    st.info("💡 Sistem, Kadir Hoca'nın özel antrenman prensipleri ve veritabanıyla çalışmaktadır.")
+    
 
 # --- ANA EKRAN ---
 st.title("🏋️ FitUzman Pro")
