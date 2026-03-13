@@ -20,7 +20,7 @@ def admin_pdf_oku():
         except Exception as e:
             return f"Sistem hatası: PDF okunamadı ({e})"
     else:
-        return "Admin (Kadir Hoca) henüz sisteme bir PDF programı yüklemedi."
+        return "Admin henüz sisteme bir PDF programı yüklemedi."
 
 # Arka planda PDF'i oku ve hafızaya al
 GIZLI_ADMIN_BİLGİSİ = admin_pdf_oku()
