@@ -39,6 +39,13 @@ with st.sidebar:
     else: st.error("Durum: Obezite Sınırı")
 
     st.divider()
+    
+    # SOHBETİ TEMİZLE BUTONU BURADA
+    if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun() # Sayfayı anında yenileyip ekranı temizler
+
+    st.divider()
     st.success("🌐 Bu yapay zeka, internetteki en güncel ve bilimsel fitness veritabanlarına bağlıdır.")
 
 # --- ANA EKRAN ---
