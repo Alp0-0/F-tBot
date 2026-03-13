@@ -1,105 +1,110 @@
 import streamlit as st
 import google.generativeai as genai
+import firebase_admin
+from firebase_admin import credentials, firestore, auth
+import json
 
-# --- YAPILANDIRMA ---
+# --- 1. FIREBASE BAĞLANTISI (KASADAN ÇEKME) ---
+if not firebase_admin._apps:
+    firebase_secrets = {
+        "type": st.secrets["FIREBASE_TYPE"],
+        "project_id": st.secrets["FIREBASE_PROJECT_ID"],
+        "private_key_id": st.secrets["FIREBASE_PRIVATE_KEY_ID"],
+        "private_key": st.secrets["FIREBASE_PRIVATE_KEY"].replace('\\n', '\n'),
+        "client_email": st.secrets["FIREBASE_CLIENT_EMAIL"],
+        "client_id": st.secrets["FIREBASE_CLIENT_ID"],
+        "auth_uri": st.secrets["FIREBASE_AUTH_URI"],
+        "token_uri": st.secrets["FIREBASE_TOKEN_URI"],
+        "auth_provider_x509_cert_url": st.secrets["FIREBASE_AUTH_PROVIDER_X509_CERT_URL"],
+        "client_x509_cert_url": st.secrets["FIREBASE_CLIENT_X509_CERT_URL"],
+    }
+    cred = credentials.Certificate(firebase_secrets)
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# --- 2. GEMINI YAPILANDIRMASA ---
 genai.configure(api_key=st.secrets["API_KEY"])
 
-st.set_page_config(page_title="FitUzman Pro", page_icon="🌐", layout="wide")
+st.set_page_config(page_title="FitUzman Pro v2", page_icon="🔐")
 
-# --- AKILLI MODEL BULUCU ---
-secilen_model = None
-try:
-    for m in genai.list_models():
-        if "generateContent" in m.supported_generation_methods:
-            model_adi = m.name.replace("models/", "")
-            if "flash" in model_adi or "pro" in model_adi:
-                secilen_model = model_adi
-                break
-    if not secilen_model:
-        for m in genai.list_models():
-            if "generateContent" in m.supported_generation_methods:
-                secilen_model = m.name.replace("models/", "")
-                break
-except Exception as e:
-    st.error(f"Model hatası: {e}")
+# --- 3. KULLANICI GİRİŞ/KAYIT MANTIĞI ---
+if "user_info" not in st.session_state:
+    st.session_state.user_info = None
 
-# --- YAN PANEL (SIDEBAR) ---
-with st.sidebar:
-    st.header("⚙️ Ayarlar ve Profil")
+def giris_ekrani():
+    st.title("🔐 FitUzman Giriş")
+    tab1, tab2 = st.tabs(["Giriş Yap", "Kayıt Ol"])
     
-    # VKİ Aç/Kapat Butonu
-    vki_aktif = st.toggle("VKİ Analizini Kullan", value=True)
-    
-    if vki_aktif:
-        st.info("Kişiselleştirilmiş analiz devrede.")
-        kilo = st.number_input("Kilo (kg)", 30, 200, 75)
-        boy = st.number_input("Boy (cm)", 100, 250, 180)
-        vki = kilo / ((boy/100) ** 2)
-        
-        st.metric("VKİ Endeksiniz", f"{vki:.1f}")
-        
-        if vki < 18.5: st.warning("Durum: Zayıf")
-        elif 18.5 <= vki < 25: st.success("Durum: Normal")
-        elif 25 <= vki < 30: st.warning("Durum: Fazla Kilolu")
-        else: st.error("Durum: Obezite Sınırı")
-    else:
-        st.info("Genel bilgi modu devrede. Kişisel veriler kullanılmıyor.")
+    with tab1:
+        email = st.text_input("E-posta", key="login_email")
+        password = st.text_input("Şifre", type="password", key="login_pw")
+        if st.button("Giriş"):
+            try:
+                # Firebase Auth ile kullanıcıyı bul
+                user = auth.get_user_by_email(email)
+                st.session_state.user_info = {"uid": user.uid, "email": email}
+                st.success("Giriş başarılı!")
+                st.rerun()
+            except Exception as e:
+                st.error("Giriş başarısız. Bilgileri kontrol edin.")
 
-    st.divider()
-    
-    if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
-        st.session_state.messages = []
+    with tab2:
+        new_email = st.text_input("E-posta", key="reg_email")
+        new_password = st.text_input("Şifre", type="password", key="reg_pw")
+        if st.button("Hesap Oluştur"):
+            try:
+                user = auth.create_user(email=new_email, password=new_password)
+                st.success("Hesap oluşturuldu! Giriş yapabilirsiniz.")
+            except Exception as e:
+                st.error(f"Hata: {e}")
+
+# --- 4. ANA UYGULAMA ---
+if st.session_state.user_info is None:
+    giris_ekrani()
+else:
+    user_uid = st.session_state.user_info["uid"]
+    st.sidebar.write(f"Hoş geldin, **{st.session_state.user_info['email']}**")
+    if st.sidebar.button("Çıkış Yap"):
+        st.session_state.user_info = None
         st.rerun()
 
-    st.divider()
-    st.success("🌐 İnternetteki en güncel ve bilimsel fitness veritabanlarına bağlıdır.")
+    # --- VERİTABANINDAN ESKİ MESAJLARI ÇEKME ---
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        # Firestore'dan çek
+        chat_ref = db.collection("chats").document(user_uid).collection("history").order_by("timestamp")
+        docs = chat_ref.stream()
+        for doc in docs:
+            st.session_state.messages.append(doc.to_dict())
 
-# --- ANA EKRAN ---
-st.title("🌐 FitUzman AI: Global Fitness Veritabanı")
-st.caption(f"✅ Sistem hazır. Bağlanılan motor: {secilen_model}")
+    # (Buraya daha önceki sohbet ve Gemini kodlarını ekleyebilirsin)
+    st.title("🏋️ FitUzman: Kişisel Geçmişin")
+    
+    # Sohbeti görüntüle
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("Hedefini yaz, en güncel bilimsel kaynaklardan planını al..."):
-    if not secilen_model:
-        st.warning("Motor bulunamadığı için cevap veremiyorum.")
-    else:
+    if prompt := st.chat_input("Mesajını yaz..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Botun Zekası: VKİ düğmesine göre değişen talimatlar!
-        if vki_aktif:
-            profil_metni = f"KULLANICI PROFİLİ: Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}."
-            vki_kurali = "2. Her zaman kullanıcının VKİ değerini dikkate alarak konuş. Zayıfsa hacim, obezite sınırındaysa kardiyo/kalori açığı odaklı konuş."
-        else:
-            profil_metni = "KULLANICI PROFİLİ: Belirtilmedi (Kullanıcı genel tavsiyeler istiyor)."
-            vki_kurali = "2. Kullanıcı spesifik bir fiziksel veri sunmadığı için genel, herkesin uygulayabileceği bilimsel fitness tavsiyeleri ver."
-
-        dinamik_talimat = f"""
-        Sen, internetteki en güvenilir spor ve beslenme bilimleri (NSCA, ACSM, güncel makaleler) verilerini analiz edebilen dünya çapında bir Baş Antrenörsün.
-        {profil_metni}
+        # Gemini yanıtı (Önceki kodundaki mantığı buraya koy)
+        response_text = "Firebase ve Gemini entegrasyonu tamam! Buraya eski Gemini cevabını bağlayacağız."
         
-        KURALLAR:
-        1. Sadece fitness, spor, sağlık ve beslenme konularında cevap ver. Başka konuları reddet.
-        {vki_kurali}
-        3. Bir antrenman veya diyet listesi verirken, bunun arkasındaki "bilimsel mantığı" (neden bu hareket, neden bu kalori) internetteki modern spor bilimlerine dayanarak kısaca açıkla.
-        4. Kesin kurallar koy.
-        """
-
+        # VERİTABANINA KAYDET
+        db.collection("chats").document(user_uid).collection("history").add({
+            "role": "user",
+            "content": prompt,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+        db.collection("chats").document(user_uid).collection("history").add({
+            "role": "assistant",
+            "content": response_text,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+        
         with st.chat_message("assistant"):
-            try:
-                model = genai.GenerativeModel(
-                    model_name=secilen_model,
-                    system_instruction=dinamik_talimat
-                )
-                response = model.generate_content(prompt)
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            except Exception as e:
-                st.error(f"Cevap üretilirken teknik bir pürüz çıktı: {e}")
+            st.markdown(response_text)
