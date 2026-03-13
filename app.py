@@ -1,31 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
-import PyPDF2
-import os
 
 # --- YAPILANDIRMA ---
 genai.configure(api_key=st.secrets["API_KEY"])
 
-# --- GİZLİ ADMİN PDF'İNİ OKUMA FONKSİYONU ---
-@st.cache_data # Performans için PDF'i her soruda değil, site açıldığında 1 kez okur
-def admin_pdf_oku():
-    dosya_adi = "admin_program.pdf" # GitHub'a yükleyeceğimiz dosyanın tam adı
-    metin = ""
-    if os.path.exists(dosya_adi):
-        try:
-            okuyucu = PyPDF2.PdfReader(dosya_adi)
-            for sayfa in okuyucu.pages:
-                metin += sayfa.extract_text() or ""
-            return metin
-        except Exception as e:
-            return f"Sistem hatası: PDF okunamadı ({e})"
-    else:
-        return "Admin henüz sisteme bir PDF programı yüklemedi."
-
-# Arka planda PDF'i oku ve hafızaya al
-GIZLI_ADMIN_BİLGİSİ = admin_pdf_oku()
-
-st.set_page_config(page_title="FitUzman Pro", page_icon="💪", layout="wide")
+st.set_page_config(page_title="FitUzman Pro", page_icon="🌐", layout="wide")
 
 # --- AKILLI MODEL BULUCU ---
 secilen_model = None
@@ -59,10 +38,11 @@ with st.sidebar:
     elif 25 <= vki < 30: st.warning("Durum: Fazla Kilolu")
     else: st.error("Durum: Obezite Sınırı")
 
-    
+    st.divider()
+    st.success("🌐 Bu yapay zeka, internetteki en güncel ve bilimsel fitness veritabanlarına bağlıdır.")
 
 # --- ANA EKRAN ---
-st.title("🏋️ FitUzman Pro")
+st.title("🌐 FitUzman AI: Global Fitness Veritabanı")
 st.caption(f"✅ Sistem hazır. Bağlanılan motor: {secilen_model}")
 
 if "messages" not in st.session_state:
@@ -72,7 +52,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Hedefini yaz, sana özel planını al..."):
+if prompt := st.chat_input("Hedefini yaz, en güncel bilimsel kaynaklardan planını al..."):
     if not secilen_model:
         st.warning("Motor bulunamadığı için cevap veremiyorum.")
     else:
@@ -80,18 +60,16 @@ if prompt := st.chat_input("Hedefini yaz, sana özel planını al..."):
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Botun Zekası: Boy, kilo ve arka plandaki Admin PDF'i birleşiyor!
+        # Botun Zekası: Boy, Kilo ve Gemini'ın Devasa İnternet Bilgisi!
         dinamik_talimat = f"""
-        Sen uzman bir fitness ve beslenme koçusun.
+        Sen, internetteki en güvenilir spor ve beslenme bilimleri (NSCA, ACSM, güncel makaleler) verilerini analiz edebilen dünya çapında bir Baş Antrenörsün.
         KULLANICI PROFİLİ: Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}.
-        
-        UYGULAMAN GEREKEN ANA SİSTEM VE PROGRAM BİLGİLERİ (Aşağıdaki metin admin PDF'inden gelmektedir):
-        {GIZLI_ADMIN_BİLGİSİ}
         
         KURALLAR:
         1. Sadece fitness, spor, sağlık ve beslenme konularında cevap ver.
-        2. Her zaman kullanıcının VKİ değerini dikkate alarak konuş.
-        3. Antrenman veya beslenme tavsiyesi verirken SADECE yukarıdaki "ANA SİSTEM" bilgilerini referans al. Eğer PDF'te o konuyla ilgili bilgi yoksa, genel fitness bilginle ama PDF'in kurallarıyla çelişmeyecek şekilde cevap ver.
+        2. Her zaman kullanıcının VKİ değerini dikkate alarak konuş. Zayıfsa hacim, obezite sınırındaysa kardiyo/kalori açığı odaklı konuş.
+        3. Bir antrenman veya diyet listesi verirken, bunun arkasındaki "bilimsel mantığı" (neden bu hareket, neden bu kalori) internetteki modern spor bilimlerine dayanarak kısaca açıkla.
+        4. Kesin kurallar koy. Örneğin "istiyorsan yapabilirsin" demek yerine "şu kas grubu için bu yapılmalıdır" şeklinde profesyonel bir dil kullan.
         """
 
         with st.chat_message("assistant"):
