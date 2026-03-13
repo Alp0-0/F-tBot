@@ -100,7 +100,7 @@ def giris_ekrani():
     with col2:
         st.markdown("""
         <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 5px solid #FF4B4B;">
-            <h4 style="margin-top: 0;">Neler Sunuyoruz?</h4>
+            <h4 style="margin-top: 0; color: #333;">Neler Sunuyoruz?</h4>
             <ul style="font-size: 0.9rem; color: #333;">
                 <li><b>🤖 Akıllı Analiz:</b> Verilerine göre özel tavsiyeler.</li>
                 <li><b>📚 Kalıcı Hafıza:</b> Geçmişin hep seninle.</li>
