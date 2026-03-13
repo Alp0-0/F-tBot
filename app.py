@@ -113,14 +113,7 @@ else:
         st.title("🛡️ Profil")
         st.write(f"Hoş geldin, **{st.session_state.user_info['email']}**")
         
-        vki_aktif = st.toggle("VKİ Analizi", value=True)
-        profil_bilgisi = "Genel Profil"
-        if vki_aktif:
-            kilo = st.number_input("Kilo (kg)", 30, 200, 75)
-            boy = st.number_input("Boy (cm)", 100, 250, 180)
-            vki = kilo / ((boy/100) ** 2)
-            st.metric("VKİ", f"{vki:.1f}")
-            profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}"
+        # VKİ bölümü tamamen kaldırıldı
         
         if st.button("🚪 Çıkış Yap / Çerezleri Sil", use_container_width=True):
             cookie_manager.delete('fituzman_uid')
@@ -155,7 +148,8 @@ else:
 
         with st.chat_message("assistant"):
             try:
-                talimat = f"Sen disiplinli ve motive edici bir fitness koçusun. Kullanıcı: {profil_bilgisi}. Tablo ve emoji kullan."
+                # Profil bilgisi yapay zeka talimatından çıkarıldı
+                talimat = "Sen disiplinli ve motive edici bir fitness koçusun. Tablo ve emoji kullan."
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 
                 response = model.generate_content(prompt, stream=True)
