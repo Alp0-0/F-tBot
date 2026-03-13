@@ -118,23 +118,37 @@ def giris_ekrani():
 if st.session_state.user_status is None:
     giris_ekrani()
 else:
+    # Sidebar: Sadece temel profil ve çıkış
     with st.sidebar:
         st.title("🛡️ Profil")
-        st.write(f"**{st.session_state.user_info['email']}**")
-        vki_aktif = st.toggle("VKİ Analizi", value=True)
-        profil_bilgisi = "Genel Profil"
-        if vki_aktif:
-            kilo = st.number_input("Kilo (kg)", 30, 200, 75)
-            boy = st.number_input("Boy (cm)", 100, 250, 180)
-            vki = kilo / ((boy/100) ** 2)
-            st.metric("VKİ", f"{vki:.1f}")
-            profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}"
-        
+        st.write(f"Hoş geldin,\n**{st.session_state.user_info['email']}**")
         if st.button("🚪 Çıkış Yap", use_container_width=True):
             cookie_manager.delete('fituzman_uid')
             st.session_state.user_status = None
             st.session_state.messages = []
             st.rerun()
+
+    # --- ANA EKRAN VKİ PANELİ (Giriş yapıldığında otomatik açık) ---
+    st.markdown("### 👋 Merhaba Şampiyon!")
+    
+    with st.expander("📊 Fiziksel Analiz ve VKİ Takibi", expanded=True):
+        col_vki1, col_vki2, col_vki3 = st.columns(3)
+        with col_vki1:
+            kilo = st.number_input("Kilo (kg)", 30, 200, 75)
+        with col_vki2:
+            boy = st.number_input("Boy (cm)", 100, 250, 180)
+        with col_vki3:
+            vki = kilo / ((boy/100) ** 2)
+            if vki < 18.5: durum, renk = "Zayıf", "blue"
+            elif 18.5 <= vki < 25: durum, renk = "Normal", "green"
+            elif 25 <= vki < 30: durum, renk = "Fazla Kilolu", "orange"
+            else: durum, renk = "Obezite", "red"
+            st.metric("VKİ Değerin", f"{vki:.1f}", delta=durum)
+        
+        st.info(f"💡 **Analiz:** Şu an **{durum}** kategorisindesin. Gemini buna göre sana özel tavsiyeler verecek.")
+        profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f} ({durum})"
+
+    st.divider()
 
     # Firestore Yükleme
     if st.session_state.user_status == "logged_in" and not st.session_state.messages:
@@ -143,17 +157,16 @@ else:
             for doc in docs: st.session_state.messages.append(doc.to_dict())
         except: pass
 
-    # Sohbet
+    # Sohbet Akışı
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Mesajını yaz..."):
+    if prompt := st.chat_input("Hangi bölgeyi çalıştıralım?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
 
         with st.chat_message("assistant"):
             try:
-                # GÜVENLİK AYARLARI (Hata çözümü burası)
                 safety_settings = [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -161,7 +174,7 @@ else:
                     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                 ]
                 
-                talimat = f"Sen disiplinli fitness koçusun. Kullanıcı: {profil_bilgisi}. Tablo ve emoji kullan. Asla medikal ilaç tavsiyesi verme ama antrenman ve doğal beslenme anlat."
+                talimat = f"Sen disiplinli fitness koçusun. Kullanıcı: {profil_bilgisi}. Tablo ve emoji kullan. İlaç tavsiyesi verme, antrenman ve doğal beslenme anlat."
                 model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
                 
                 response = model.generate_content(prompt, stream=True, safety_settings=safety_settings)
@@ -173,19 +186,19 @@ else:
                         if chunk.text:
                             res_text += chunk.text
                             placeholder.markdown(res_text + "▌")
-                    except: continue # Güvenliğe takılan parçayı atla
+                    except: continue
                 
                 if not res_text:
-                    res_text = "Bu isteği güvenlik kuralları nedeniyle yanıtlayamıyorum. Lütfen antrenman veya beslenme ile ilgili farklı bir şey sor şampiyon!"
+                    res_text = "Güvenlik nedeniyle bu soruyu yanıtlayamıyorum. Lütfen antrenman odaklı bir soru sor!"
                 
                 placeholder.markdown(res_text)
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
 
                 if st.session_state.user_status == "logged_in":
                     uid = st.session_state.user_info["uid"]
+                    batch = db.batch()
                     u_ref = db.collection("chats").document(uid).collection("history").document()
                     a_ref = db.collection("chats").document(uid).collection("history").document()
-                    batch = db.batch()
                     batch.set(u_ref, {"role": "user", "content": prompt, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.set(a_ref, {"role": "assistant", "content": res_text, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.commit()
