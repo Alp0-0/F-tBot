@@ -4,8 +4,7 @@ import google.generativeai as genai
 # --- YAPILANDIRMA ---
 # Buraya tırnak içinde kendi anahtarını yapıştır
 genai.configure(api_key=st.secrets["API_KEY"])
-genai.configure(api_key=API_KEY)
-
+genai.configure(api_key=st.secrets["API_KEY"])
 # --- WEB ARAYÜZÜ ---
 st.set_page_config(page_title="FitUzman AI", page_icon="💪")
 st.title("🏋️ FitUzman: 7/24 Spor Koçun")
