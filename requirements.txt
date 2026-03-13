@@ -1,3 +1,4 @@
-firebase-admin
-google-generativeai
 streamlit
+google-generativeai
+firebase-admin
+extra-streamlit-components
