@@ -5,6 +5,14 @@ from firebase_admin import credentials, firestore, auth
 import extra_streamlit_components as stx
 from datetime import datetime, timedelta
 
+st.markdown("""
+        <style>
+        .stChatMessage { background-color: #f8f9fa; border-radius: 15px; margin-bottom: 10px; }
+        .stButton>button { border-radius: 20px; }
+        </style>
+    """, unsafe_allow_html=True)
+
+
 # --- 1. FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
     firebase_secrets = {
@@ -170,6 +178,25 @@ else:
             st.markdown(msg["content"])
 
     # Chat Girişi
+
+    st.write("---")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("🍎 Beslenme Listesi", use_container_width=True):
+            prompt = "Bana bugüne özel bir beslenme programı hazırla."
+    with c2:
+        if st.button("💪 Antrenman Öner", use_container_width=True):
+            prompt = "Bugün hangi bölgeleri çalıştırmalıyım?"
+    with c3:
+        if st.button("🔥 Yağ Yakımı", use_container_width=True):
+            prompt = "Hızlı yağ yakmak için 3 ipucu verir misin?"
+
+    # Eğer butonlardan birine basıldıysa, otomatik olarak prompt'u tetikle
+    if 'prompt' in locals():
+        # Bu kısım senin mevcut sohbet mantığınla aynı çalışacak
+        pass
+
+        
     if prompt := st.chat_input("Hangi bölgeyi çalıştıralım?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
