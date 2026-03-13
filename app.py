@@ -5,14 +5,6 @@ from firebase_admin import credentials, firestore, auth
 import extra_streamlit_components as stx
 from datetime import datetime, timedelta
 
-st.markdown("""
-        <style>
-        .stChatMessage { background-color: #f8f9fa; border-radius: 15px; margin-bottom: 10px; }
-        .stButton>button { border-radius: 20px; }
-        </style>
-    """, unsafe_allow_html=True)
-
-
 # --- 1. FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
     firebase_secrets = {
@@ -126,81 +118,52 @@ def giris_ekrani():
 if st.session_state.user_status is None:
     giris_ekrani()
 else:
-    # Sidebar: Tüm araçları buraya topluyoruz
+    # Sidebar: Sadece temel profil ve çıkış
     with st.sidebar:
-        st.title("🛡️ Kontrol Paneli")
-        st.write(f"Sporcu: **{st.session_state.user_info['email'].split('@')[0]}**")
-        
-        st.divider()
-        
-        # İstediğimiz zaman bu özelliği katabilmek için bir kontrol:
-        vki_modu = st.checkbox("VKİ Analiz Aracını Aç", value=False)
-        profil_bilgisi = "Genel Fitness Profili"
-
-        if vki_modu:
-            # Sadece tıklandığında görünen, küçük bir kutu
-            with st.expander("📊 VKİ Hesapla", expanded=True):
-                kilo = st.number_input("Kilo (kg)", 30, 200, 75, key="kilo_input")
-                boy = st.number_input("Boy (cm)", 100, 250, 180, key="boy_input")
-                vki = kilo / ((boy/100) ** 2)
-                
-                # Durum belirleme
-                if vki < 18.5: durum = "Zayıf"
-                elif 18.5 <= vki < 25: durum = "Normal"
-                elif 25 <= vki < 30: durum = "Kilolu"
-                else: durum = "Obez"
-                
-                st.metric("VKİ", f"{vki:.1f}", durum)
-                profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f} ({durum})"
-
-        st.divider()
-        
+        st.title("🛡️ Profil")
+        st.write(f"Hoş geldin,\n**{st.session_state.user_info['email']}**")
         if st.button("🚪 Çıkış Yap", use_container_width=True):
             cookie_manager.delete('fituzman_uid')
             st.session_state.user_status = None
             st.session_state.messages = []
             st.rerun()
 
-    # --- ANA EKRAN ---
-    st.title("🏋️ FitUzman AI")
+    # --- ANA EKRAN VKİ PANELİ (Giriş yapıldığında otomatik açık) ---
+    st.markdown("### 👋 Merhaba Şampiyon!")
     
-    # Firestore'dan geçmiş mesajları yükleme (Sadece ilk girişte)
+    with st.expander("📊 Fiziksel Analiz ve VKİ Takibi", expanded=True):
+        col_vki1, col_vki2, col_vki3 = st.columns(3)
+        with col_vki1:
+            kilo = st.number_input("Kilo (kg)", 30, 200, 75)
+        with col_vki2:
+            boy = st.number_input("Boy (cm)", 100, 250, 180)
+        with col_vki3:
+            vki = kilo / ((boy/100) ** 2)
+            if vki < 18.5: durum, renk = "Zayıf", "blue"
+            elif 18.5 <= vki < 25: durum, renk = "Normal", "green"
+            elif 25 <= vki < 30: durum, renk = "Fazla Kilolu", "orange"
+            else: durum, renk = "Obezite", "red"
+            st.metric("VKİ Değerin", f"{vki:.1f}", delta=durum)
+        
+        st.info(f"💡 **Analiz:** Şu an **{durum}** kategorisindesin. Gemini buna göre sana özel tavsiyeler verecek.")
+        profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f} ({durum})"
+
+    st.divider()
+
+    # Firestore Yükleme
     if st.session_state.user_status == "logged_in" and not st.session_state.messages:
         try:
             docs = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp").stream()
-            for doc in docs:
-                st.session_state.messages.append(doc.to_dict())
+            for doc in docs: st.session_state.messages.append(doc.to_dict())
         except: pass
 
-    # Sohbet Geçmişini Görüntüle
+    # Sohbet Akışı
     for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    # Chat Girişi
-
-    st.write("---")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("🍎 Beslenme Listesi", use_container_width=True):
-            prompt = "Bana bugüne özel bir beslenme programı hazırla."
-    with c2:
-        if st.button("💪 Antrenman Öner", use_container_width=True):
-            prompt = "Bugün hangi bölgeleri çalıştırmalıyım?"
-    with c3:
-        if st.button("🔥 Yağ Yakımı", use_container_width=True):
-            prompt = "Hızlı yağ yakmak için 3 ipucu verir misin?"
-
-    # Eğer butonlardan birine basıldıysa, otomatik olarak prompt'u tetikle
-    if 'prompt' in locals():
-        # Bu kısım senin mevcut sohbet mantığınla aynı çalışacak
-        pass
-
-        
     if prompt := st.chat_input("Hangi bölgeyi çalıştıralım?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
 
         with st.chat_message("assistant"):
             try:
@@ -231,7 +194,6 @@ else:
                 placeholder.markdown(res_text)
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
 
-                # Firebase Kayıt
                 if st.session_state.user_status == "logged_in":
                     uid = st.session_state.user_info["uid"]
                     batch = db.batch()
