@@ -38,7 +38,7 @@ st.set_page_config(page_title="FitUzman Pro v2", page_icon="🏋️", layout="wi
 
 # --- 3. DURUM YÖNETİMİ ---
 if "user_status" not in st.session_state:
-    st.session_state.user_status = None # "logged_in", "guest" veya None
+    st.session_state.user_status = None
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -79,31 +79,31 @@ def giris_ekrani():
             st.session_state.user_info = {"uid": "guest", "email": "Misafir Kullanıcı"}
             st.rerun()
 
-# --- 5. ANA UYGULAMA DÖNGÜSÜ ---
+# --- 5. ANA UYGULAMA ---
 if st.session_state.user_status is None:
     giris_ekrani()
 else:
-    # Sidebar
+    # Sidebar Ayarları
     with st.sidebar:
         st.title("🛡️ Profil")
-        st.write(f"Durum: **{st.session_state.user_info['email']}**")
-        
-        if st.session_state.user_status == "guest":
-            st.warning("⚠️ Misafir modundasınız. Konuşmalarınız kaydedilmez.")
+        st.write(f"Kullanıcı: **{st.session_state.user_info['email']}**")
         
         vki_aktif = st.toggle("VKİ Analizi", value=True)
+        profil_bilgisi = "Genel Profil"
         if vki_aktif:
             kilo = st.number_input("Kilo (kg)", 30, 200, 75)
             boy = st.number_input("Boy (cm)", 100, 250, 180)
             vki = kilo / ((boy/100) ** 2)
             st.metric("VKİ", f"{vki:.1f}")
+            profil_bilgisi = f"Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}"
         
-        if st.button("🚪 Çıkış Yap / Ana Menü", use_container_width=True):
+        st.divider()
+        if st.button("🚪 Çıkış Yap", use_container_width=True):
             st.session_state.user_status = None
             st.session_state.messages = []
             st.rerun()
 
-    # Geçmişi Yükle (Sadece Giriş Yapılmışsa)
+    # Firebase'den geçmişi bir kez çek
     if st.session_state.user_status == "logged_in" and not st.session_state.messages:
         try:
             chat_ref = db.collection("chats").document(st.session_state.user_info["uid"]).collection("history").order_by("timestamp")
@@ -112,63 +112,59 @@ else:
                 st.session_state.messages.append(doc.to_dict())
         except: pass
 
-    # Sohbet Arayüzü
     st.title("🏋️ FitUzman AI")
     
+    # Mesajları Görüntüle
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
+    # Yeni Mesaj Girişi
     if prompt := st.chat_input("Sorunu buraya yaz..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Gemini Yanıtı
-      with st.chat_message("assistant"):
+        # Gemini ve Kayıt Mantığı
+        with st.chat_message("assistant"):
             try:
-                model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
-                # Stream=True ile cevabı parça parça alıyoruz
-                response = model.generate_content(prompt, stream=True)
+                # Dinamik Talimat (Persona)
+                talimat = f"""
+                Sen, dünyanın en iyi spor salonlarında çalışmış, sempatik ama disiplinli bir 'Baş Antrenör' karakterisin.
+                Kullanıcı Verileri: {profil_bilgisi}.
                 
+                KURALLAR:
+                1. Enerjik ve motive edici ol. Sporcu jargonları kullan.
+                2. Markdown TABLO ve emoji kullanmaya özen göster.
+                3. Her cevabın sonunda kullanıcıya etkileşimli bir soru sor.
+                """
+                
+                model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
+                
+                # Streaming (Yazıyor efekti)
+                response = model.generate_content(prompt, stream=True)
                 res_text = ""
-                placeholder = st.empty() # Cevabın yazılacağı boş alan
+                placeholder = st.empty()
                 
                 for chunk in response:
                     res_text += chunk.text
-                    placeholder.markdown(res_text + "▌") # Yazma efekti
+                    placeholder.markdown(res_text + "▌")
                 
-                placeholder.markdown(res_text) # Yazma bitince imleci kaldır
+                placeholder.markdown(res_text)
                 
-                st.session_state.messages.append({"role": "assistant", "content": res_text})
-                # ... (Firebase kayıt kodların burada devam edecek)
-            try:
-                talimat = f"""
-Sen, dünyanın en iyi spor salonlarında çalışmış, sempatik ama disiplinli bir 'Baş Antrenör' ve 'Beslenme Uzmanı' karakterisin. 
-Adın: FitUzman AI. 
-
-DAVRANIŞ KURALLARIN:
-1. **Persona:** Enerjik, motive edici ve profesyonel bir dil kullan. Cümle aralarına sporcu jargonları (Set, reps, bulk, definasyon, makrolar) serpiştir.
-2. **Kişiselleştirme:** {profil} verilerini asla unutma. Eğer kullanıcı obezite sınırındaysa ona 'şampiyon, eklemlerini korumak için bugün koşu bandı yerine eliptik yapalım' gibi spesifik tavsiyeler ver.
-3. **Görsellik:** Liste verirken mutlaka emoji kullan. Program yazarken mutlaka Markdown TABLO formatını kullan. Önemli uyarıları **kalın** yaz.
-4. **Bilimsellik:** Bir öneri verdiğinde (örn: neden yüksek protein?) bunun arkasındaki fizyolojik nedeni kısaca açıkla.
-5. **Diyaloğu Canlı Tut:** Her cevabın sonunda mutlaka kullanıcıya süreci devam ettirecek, onu düşündürecek bir soru sor. (Örn: 'Peki, bugün antrenman için 45 dakikan var mı?', 'Bu diyet listesindeki öğünlerden hangisi seni en çok zorlar?')
-6. **Yasaklar:** Fitness, spor, sağlık ve beslenme dışındaki soruları 'Benim uzmanlık alanım demir ve ter şampiyon, gel biz hedeflerine odaklanalım' diyerek nazikçe reddet.
-"""
-                model = genai.GenerativeModel(model_name=secilen_model, system_instruction=talimat)
-                response = model.generate_content(prompt)
-                res_text = response.text
-                st.markdown(res_text)
+                # Hafızaya ekle
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
 
-                # --- KAYIT MANTIĞI ---
+                # Firebase'e Kaydet (Sadece giriş yapılmışsa)
                 if st.session_state.user_status == "logged_in":
                     uid = st.session_state.user_info["uid"]
                     batch = db.batch()
                     u_ref = db.collection("chats").document(uid).collection("history").document()
                     a_ref = db.collection("chats").document(uid).collection("history").document()
+                    
                     batch.set(u_ref, {"role": "user", "content": prompt, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.set(a_ref, {"role": "assistant", "content": res_text, "timestamp": firestore.SERVER_TIMESTAMP})
                     batch.commit()
+                    
             except Exception as e:
-                st.error(f"Hata: {e}")
+                st.error(f"Bir hata oluştu: {e}")
