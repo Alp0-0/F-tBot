@@ -1,21 +1,29 @@
 import streamlit as st
 import google.generativeai as genai
+import PyPDF2
+import os
 
 # --- YAPILANDIRMA ---
 genai.configure(api_key=st.secrets["API_KEY"])
 
-# ==========================================
-# 👑 ADMİN BÖLGESİ: BURAYA KENDİ SİSTEMİNİ YAZ
-# ==========================================
-ADMIN_PROGRAMI = """
-GENEL BİLGİLER VE KURALLAR:
-- Yeni başlayanlar (VKİ 25 üstü) için ilk 2 hafta sadece kardiyo (yürüyüş/yüzme) önerilecek.
-- Ağırlık antrenmanları: Pazartesi (Göğüs/Sırt), Çarşamba (Bacak/Omuz), Cuma (Tüm Vücut).
-- Beslenme kuralı: İşlenmiş şeker kesinlikle yasak. Günlük en az 2.5 litre su içilecek.
-- Egzersiz formları sorulduğunda, hareketin doğru yapılışını adım adım anlat.
-(Not: Bu kısmı Kadir Hoca hazırlamıştır, sadece bu kuralların dışına çıkma.)
-"""
-# ==========================================
+# --- GİZLİ ADMİN PDF'İNİ OKUMA FONKSİYONU ---
+@st.cache_data # Performans için PDF'i her soruda değil, site açıldığında 1 kez okur
+def admin_pdf_oku():
+    dosya_adi = "admin_program.pdf" # GitHub'a yükleyeceğimiz dosyanın tam adı
+    metin = ""
+    if os.path.exists(dosya_adi):
+        try:
+            okuyucu = PyPDF2.PdfReader(dosya_adi)
+            for sayfa in okuyucu.pages:
+                metin += sayfa.extract_text() or ""
+            return metin
+        except Exception as e:
+            return f"Sistem hatası: PDF okunamadı ({e})"
+    else:
+        return "Admin (Kadir Hoca) henüz sisteme bir PDF programı yüklemedi."
+
+# Arka planda PDF'i oku ve hafızaya al
+GIZLI_ADMIN_BİLGİSİ = admin_pdf_oku()
 
 st.set_page_config(page_title="FitUzman Pro", page_icon="💪", layout="wide")
 
@@ -52,7 +60,7 @@ with st.sidebar:
     else: st.error("Durum: Obezite Sınırı")
 
     st.divider()
-    st.info("💡 Sistem, Kadir Hoca'nın özel antrenman prensipleriyle çalışmaktadır.")
+    st.info("💡 Sistem, Kadir Hoca'nın özel antrenman prensipleri ve veritabanıyla çalışmaktadır.")
 
 # --- ANA EKRAN ---
 st.title("🏋️ FitUzman Pro")
@@ -65,7 +73,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Hedefini yaz, Kadir Hoca'nın sistemine göre planını al..."):
+if prompt := st.chat_input("Hedefini yaz, sana özel planını al..."):
     if not secilen_model:
         st.warning("Motor bulunamadığı için cevap veremiyorum.")
     else:
@@ -73,18 +81,18 @@ if prompt := st.chat_input("Hedefini yaz, Kadir Hoca'nın sistemine göre planı
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Botun Zekası: Boy, kilo ve senin Admin Kuralların birleşiyor!
+        # Botun Zekası: Boy, kilo ve arka plandaki Admin PDF'i birleşiyor!
         dinamik_talimat = f"""
         Sen uzman bir fitness ve beslenme koçusun.
         KULLANICI PROFİLİ: Kilo: {kilo}kg, Boy: {boy}cm, VKİ: {vki:.1f}.
         
-        UYGULAMAN GEREKEN ANA SİSTEM VE PROGRAM (Kadir Hoca'nın Kuralları):
-        {ADMIN_PROGRAMI}
+        UYGULAMAN GEREKEN ANA SİSTEM VE PROGRAM BİLGİLERİ (Aşağıdaki metin admin PDF'inden gelmektedir):
+        {GIZLI_ADMIN_BİLGİSİ}
         
         KURALLAR:
         1. Sadece fitness, spor, sağlık ve beslenme konularında cevap ver.
         2. Her zaman kullanıcının VKİ değerini dikkate alarak konuş.
-        3. Antrenman veya beslenme tavsiyesi verirken SADECE yukarıdaki "ANA SİSTEM VE PROGRAM" kurallarını uygula.
+        3. Antrenman veya beslenme tavsiyesi verirken SADECE yukarıdaki "ANA SİSTEM" bilgilerini referans al. Eğer PDF'te o konuyla ilgili bilgi yoksa, genel fitness bilginle ama PDF'in kurallarıyla çelişmeyecek şekilde cevap ver.
         """
 
         with st.chat_message("assistant"):
